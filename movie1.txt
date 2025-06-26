@@ -1,0 +1,93 @@
+import streamlit as st
+import pickle
+import pandas as pd
+import requests
+
+# ✅ Fetch poster using TMDb API by title
+def fetch_poster_by_title(title, media_type="movie"):
+    url = f"https://api.themoviedb.org/3/search/{media_type}"
+    params = {
+        "api_key": "8265bd1679663a7ea12ac168da84d2e8",
+        "query": title
+    }
+    response = requests.get(url, params=params)
+    if response.status_code == 200:
+        data = response.json()
+        if data.get("results"):
+            poster_path = data["results"][0].get("poster_path")
+            if poster_path:
+                return "https://image.tmdb.org/t/p/w500" + poster_path
+    # Return fallback image
+    return "https://via.placeholder.com/300x450.png?text=No+Image"
+
+# ✅ Load datasets
+movies_dict = pickle.load(open("netflix_dict.pkl", "rb"))
+movies = pd.DataFrame(movies_dict)
+
+shows_dict = pickle.load(open("netflix_dict.pkl", "rb"))
+shows = pd.DataFrame(shows_dict)
+
+similarity = pickle.load(open("similarity.pkl", "rb"))
+
+# ✅ Movie Recommendation
+def recommend_movie(selected_title):
+    movie_index = movies[movies['title_movie'] == selected_title].index[0]
+    distances = similarity[movie_index]
+    recommendations = sorted(list(enumerate(distances)), reverse=True, key=lambda x: x[1])[1:6]
+
+    titles = []
+    posters = []
+
+    for i in recommendations:
+        title = movies.iloc[i[0]]['title_movie']
+        if pd.notna(title) and title.lower() != "none":
+            poster = fetch_poster_by_title(title, media_type="movie")
+            titles.append(title)
+            posters.append(poster)
+    return titles, posters
+
+# ✅ Show Recommendation
+def recommend_show(selected_title):
+    show_index = shows[shows['title_show'] == selected_title].index[0]
+    distances = similarity[show_index]
+    recommendations = sorted(list(enumerate(distances)), reverse=True, key=lambda x: x[1])[1:6]
+
+    titles = []
+    posters = []
+
+    for i in recommendations:
+        title = shows.iloc[i[0]]['title_show']
+        if pd.notna(title) and title.lower() != "none":
+            poster = fetch_poster_by_title(title, media_type="tv")
+            titles.append(title)
+            posters.append(poster)
+    return titles, posters
+
+# ✅ Streamlit UI
+st.set_page_config(layout="wide")
+st.title("🎬 Movie & 📺 Show Recommender System")
+
+# ───── Movie Section ─────
+st.header("🎥 Movie Recommender")
+selected_movie = st.selectbox("Select a movie:", movies["title_movie"].dropna().unique())
+
+if st.button("Recommend Movies"):
+    movie_titles, movie_posters = recommend_movie(selected_movie)
+    cols = st.columns(5)
+    for i in range(len(movie_titles)):
+        with cols[i]:
+            st.image(movie_posters[i], caption=movie_titles[i], use_container_width=True)
+
+# ───── Show Section ─────
+st.header("📺 Show Recommender")
+selected_show = st.selectbox("Select a show:", shows["title_show"].dropna().unique())
+
+if st.button("Recommend Shows"):
+    show_titles, show_posters = recommend_show(selected_show)
+    cols = st.columns(5)
+    for i in range(len(show_titles)):
+        with cols[i]:
+            st.image(show_posters[i], caption=show_titles[i], use_container_width=True)
+
+
+
